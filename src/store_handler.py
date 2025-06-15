@@ -45,7 +45,7 @@ class StoreHandler:
 
     def load_runs(self, run_target_names: dict[str, str]) -> [Run]:
         runs: [Run] = []
-        for run_name, target_name in run_target_names:
+        for run_name, target_name in run_target_names.items():
             runs.append(self.load_run(run_name, target_name))
         return runs
 

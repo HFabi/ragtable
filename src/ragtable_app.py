@@ -47,18 +47,20 @@ class RagTableApp:
     def create_ragtable(self,
                         from_runs: dict[str, str],
                         merge_runs_on: list[str],
-                        select: list[str],
-                        where: str | None,
+                        select: list[str] | None = None,
+                        where: str | None = None,
                         merge_type: Literal["left", "right", "inner", "outer", "cross"] = 'inner',
                         ):
         # load
         runs: [Run] = self.store_handler.load_runs(from_runs)
 
         # add common columns
-        df_all: pd.DataFrame = runs[0][[merge_runs_on]]
+        df_all: pd.DataFrame = runs[0].data[merge_runs_on]
         # add columns of all the runs
         for run in runs:
-            df = run.data.add_suffix(run.name)
+            #
+            names_map = {k: f'{k}_{run.name}' for k in run.data.columns if k not in merge_runs_on}
+            df = run.data.rename(columns=names_map)
             df_all = pd.merge(df_all, df, on=merge_runs_on, how=merge_type)
 
         return self._subtable(from_runs, df_all, select, where)
@@ -66,29 +68,31 @@ class RagTableApp:
     def _subtable(self,
                   run_mapping: dict[str, str],
                   df_data: pd.DataFrame,
-                  select: list[str],
-                  query: str | None,
+                  select: list[str] | None = None,
+                  where: str | None = None,
                   ):
         # query
-        if query:
-            df_data = df_data.query(query)
+        if where:
+            df_data = df_data.query(where)
 
         # metadata
-        df_metadata = pd.DataFrame()
-        for suffix in run_mapping.values():
-            fm = analyzer.generate_metadata(df_data, self.config.metadata, suffix)
-            df_metadata = pd.concat([metadata_all, fm])
+        df_metadata_all = pd.DataFrame()
+        for run_name, suffix in run_mapping.items():
+            fm = self.analyzer.generate_metadata(df_data, self.config.metadata, run_name, None, suffix)
+            df_metadata_all = pd.concat([df_metadata_all, fm])
 
         # filter
-        df_data = df_data[select]
-        return RagTable(run_mapping, df_data, df_metadata)
+        if select:
+            df_data = df_data[select]
+
+        return RagTable(run_mapping, df_data, df_metadata_all)
 
     def subtable(self,
                  t: RagTable,
-                 select: list[str],
-                 where: str,
+                 select: list[str] | None = None,
+                 where: str | None = None,
                  ):
-        return self.subtable(t.run_mapping, t.data, select, where)
+        return self._subtable(t.run_mapping, t.data, select, where)
 
 
 if __name__ == '__main__':
